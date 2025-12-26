@@ -1,0 +1,42 @@
+# Build directories
+build/
+cmake-build-*/
+*.cmake
+!CMakeLists.txt
+
+# Compiled files
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.obj
+*.o
+
+# IDE files
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CMake cache
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# External dependencies (tự động tải khi build)
+mini_http_server/external/mongoose/
+**/external/*/
+!**/external/.gitkeep
+
+# Downloaded files
+*.zip
+*.tar.gz
+
+# Logs
+*.log

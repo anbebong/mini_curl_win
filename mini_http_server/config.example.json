@@ -1,0 +1,11 @@
+{
+  "token_endpoint": "https://uat.lab.linksafe.vn/id/realms/main/protocol/openid-connect/token",
+  "redirect_uri": "http://localhost:8085/callback",
+  "client_id": "lzt-portal",
+  "client_secret": "",
+  "token_file": "token.json",
+  "verify_ssl": true,
+  "save_token": false,
+  "listening_addr": "http://0.0.0.0:8085"
+}
+
