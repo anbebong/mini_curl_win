@@ -137,7 +137,7 @@ WinHttpCurl::~WinHttpCurl() {
 bool WinHttpCurl::Init() {
     if (initialized) return true;
     
-    hSession = WinHttpOpen(L"WinHTTP-Curl/1.0",
+    hSession = WinHttpOpen(L"WinHTTP-Curl-AnPT/1.0",
                           WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                           WINHTTP_NO_PROXY_NAME,
                           WINHTTP_NO_PROXY_BYPASS, 0);

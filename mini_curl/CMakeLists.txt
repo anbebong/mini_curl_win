@@ -21,10 +21,12 @@ endif()
 # Source files
 set(SOURCES
     src/winhttp_curl.cpp
+    src/mini_curl_c.cpp
 )
 
 set(HEADERS
     include/winhttp_curl.h
+    include/mini_curl_c.h
 )
 
 # Option to build as DLL or static library
@@ -36,7 +38,7 @@ option(BUILD_SHARED_LIBS "Build shared library (DLL)" OFF)
 if(BUILD_SHARED_LIBS)
     # Build as DLL (shared library) - cần DLL file khi chạy
     add_library(mini_curl SHARED ${SOURCES} ${HEADERS})
-    target_compile_definitions(mini_curl PRIVATE BUILD_DLL MINI_CURL_EXPORTS)
+    target_compile_definitions(mini_curl PRIVATE BUILD_DLL MINI_CURL_EXPORTS MINI_CURL_C_EXPORTS)
     # Set DLL output name
     set_target_properties(mini_curl PROPERTIES
         OUTPUT_NAME "mini_curl"
@@ -70,22 +72,4 @@ install(TARGETS mini_curl
 )
 
 install(FILES ${HEADERS} DESTINATION include)
-
-# Example executable - API Client (C)
-add_executable(example_api_simple_c 
-    examples/example_api_simple.c 
-    examples/api_client_c.cpp
-)
-target_include_directories(example_api_simple_c PRIVATE 
-    $<TARGET_PROPERTY:mini_curl,INTERFACE_INCLUDE_DIRECTORIES>
-    examples
-)
-target_link_libraries(example_api_simple_c mini_curl winhttp)
-
-# Define MINI_CURL_STATIC for static linking (already defined in mini_curl target)
-
-# Set output directory
-set_target_properties(example_api_simple_c PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
 

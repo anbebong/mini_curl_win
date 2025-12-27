@@ -46,7 +46,7 @@ struct MINI_CURL_API HttpOptions {
     std::string password;
     
     HttpOptions() : timeout(30), followRedirects(true), verifySSL(true) {
-        userAgent = "WinHTTP-Curl/1.0";
+        userAgent = "WinHTTP-Curl-AnPT/1.0";
     }
 };
 

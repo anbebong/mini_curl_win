@@ -11,14 +11,16 @@ Dự án này bao gồm 2 thư viện chính:
 call-api/
 ├── mini_curl/                    # HTTP Client Library
 │   ├── include/
-│   │   └── winhttp_curl.h        # Public API header
+│   │   ├── winhttp_curl.h        # C++ API header
+│   │   └── mini_curl_c.h         # C API header (cho DLL)
 │   ├── src/
-│   │   └── winhttp_curl.cpp      # Implementation
-│   └── examples/
-│       ├── example_api_simple.c  # C example
-│       ├── api_client.h          # C++ helper class
-│       ├── api_client_c.h        # C wrapper header
-│       └── api_client_c.cpp      # C wrapper implementation
+│   │   ├── winhttp_curl.cpp      # C++ implementation
+│   │   └── mini_curl_c.cpp       # C API implementation
+│   ├── examples/
+│   │   ├── api_client.h          # C++ helper class
+│   │   ├── api_client_c.h        # C wrapper header
+│   │   └── api_client_c.cpp      # C wrapper implementation
+│   └── README.md                 # Tài liệu chi tiết
 │
 ├── mini_http_server/             # HTTP Server Library
 │   ├── include/
@@ -83,36 +85,77 @@ cmake --build .
 
 Sau khi build, các file sẽ nằm trong `build/bin/`:
 
-- `example_api_simple_c.exe` - mini_curl example (C)
+- `example_curl_dll_direct.exe` - mini_curl DLL example (load DLL trực tiếp)
+- `example_full_app.exe` - Full app example (kết hợp cả 2 libraries)
 - `example_simple.exe` - mini_http_server simple example (C)
 - `example_oidc.exe` - mini_http_server OIDC example (C)
 
 Libraries sẽ nằm trong `build/lib/`:
-- `libmini_curl.a` - mini_curl static library
+- `libmini_curl.a` - mini_curl static library (khi build static)
+- `libmini_curl.dll` - mini_curl DLL (khi build DLL, nằm trong `build/bin/`)
 - `libmini_http_server.a` - mini_http_server static library
 
 ## Sử dụng
 
 ### mini_curl - HTTP Client
 
-#### C++ Example
+Xem tài liệu chi tiết: [mini_curl/README.md](mini_curl/README.md)
+
+#### C++ API (Static Library)
 
 ```cpp
 #include "winhttp_curl.h"
 
 WinHttpCurl http;
+http.Init();
+
 HttpOptions options;
-options.verifySSL = false;  // Skip SSL verification (development only)
+options.verifySSL = true;
+options.timeout = 30;
 
 HttpResponse response = http.Get("https://api.example.com/data", options);
 if (response.statusCode == 200) {
     printf("Response: %s\n", response.body.c_str());
 }
+
+http.Cleanup();
 ```
 
-#### C Example
+#### C API (Static Library)
 
-Xem `mini_curl/examples/example_api_simple.c` để biết cách sử dụng C wrapper.
+```c
+#include "mini_curl_c.h"
+
+MiniCurlHandle curl = mini_curl_c_create();
+mini_curl_c_init(curl);
+
+MiniCurlOptions options = {0};
+options.verifySSL = 1;
+options.timeout = 30;
+
+MiniCurlResponse* response = mini_curl_c_get(curl, "https://api.example.com/data", &options);
+if (response && response->statusCode == 200) {
+    printf("Response: %s\n", response->body);
+}
+
+mini_curl_c_response_free(response);
+mini_curl_c_cleanup(curl);
+mini_curl_c_destroy(curl);
+```
+
+#### Load DLL Trực Tiếp (Không cần link)
+
+```c
+#include <windows.h>
+#include "mini_curl_c.h"
+
+// Load DLL và get function pointers
+HMODULE dll = LoadLibraryA("libmini_curl.dll");
+create_fn create = (create_fn)GetProcAddress(dll, "mini_curl_c_create");
+// ... sử dụng functions
+```
+
+Xem `examples/example_curl_dll_direct.c` để biết ví dụ đầy đủ.
 
 ### mini_http_server - HTTP Server
 

@@ -1,8 +1,10 @@
 @echo off
 REM Build script sử dụng CMake với MinGW-w64
 REM Usage:
-REM   build_cmake.bat        - Build project
-REM   build_cmake.bat clean   - Clean build directory
+REM   build_cmake.bat        - Build project (static library - default)
+REM   build_cmake.bat dll    - Build as DLL (dynamic library)
+REM   build_cmake.bat static - Build as static library
+REM   build_cmake.bat clean  - Clean build directory
 
 REM Kiểm tra nếu có argument "clean"
 if "%1"=="clean" (
@@ -17,7 +19,18 @@ if "%1"=="clean" (
     exit /b 0
 )
 
-echo Building với CMake và MinGW-w64...
+REM Xác định build type
+set BUILD_TYPE=STATIC
+if "%1"=="dll" (
+    set BUILD_TYPE=DLL
+    echo Building as DLL (Dynamic Link Library)...
+) else if "%1"=="static" (
+    set BUILD_TYPE=STATIC
+    echo Building as Static Library...
+) else (
+    echo Building as Static Library (default)...
+    echo Use "build_cmake.bat dll" to build as DLL
+)
 echo.
 
 REM Kiểm tra CMake
@@ -58,7 +71,11 @@ if exist CMakeCache.txt (
 
 REM Configure với MinGW Makefiles
 echo Configuring CMake với MinGW Makefiles...
-cmake .. -G "MinGW Makefiles"
+if "%BUILD_TYPE%"=="DLL" (
+    cmake .. -G "MinGW Makefiles" -DBUILD_SHARED_LIBS=ON
+) else (
+    cmake .. -G "MinGW Makefiles" -DBUILD_SHARED_LIBS=OFF
+)
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
@@ -84,18 +101,32 @@ cd ..
 echo.
 echo ========================================
 echo Build successful!
+if "%BUILD_TYPE%"=="DLL" (
+    echo Build type: DLL (Dynamic Link Library)
+    echo.
+    echo IMPORTANT: When distributing your application:
+    echo   - Copy both .exe and .dll files together
+    echo   - DLL files are in: build\bin\
+) else (
+    echo Build type: Static Library
+    echo Note: Executable is standalone (no DLL needed)
+)
 echo.
 echo Executable locations:
-echo   - build\bin\example_api_simple_c.exe (mini_curl example)
-echo   - build\bin\example_simple.exe (mini_http_server simple example)
-echo   - build\bin\example_oidc.exe (mini_http_server OIDC example)
+echo   - build\bin\example_curl_dll_direct.exe (mini_curl DLL example)
+echo   - build\bin\example_full_app.exe (full app example)
+if "%BUILD_TYPE%"=="DLL" (
+    echo   - build\bin\mini_curl.dll (mini_curl DLL)
+    echo   - build\bin\mini_http_server.dll (mini_http_server DLL)
+)
 echo.
 echo Run examples:
-echo   build\bin\example_api_simple_c.exe
-echo   build\bin\example_simple.exe
-echo   build\bin\example_oidc.exe
+echo   build\bin\example_curl_dll_direct.exe
+echo   build\bin\example_full_app.exe
 echo.
 echo To clean build: build_cmake.bat clean
+echo To build DLL: build_cmake.bat dll
+echo To build static: build_cmake.bat static
 echo ========================================
 echo.
 pause
