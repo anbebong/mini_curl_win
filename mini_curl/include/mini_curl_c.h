@@ -21,6 +21,7 @@ typedef struct {
     char* body;           // Phải gọi mini_curl_response_free_body để giải phóng
     size_t bodySize;
     char* error;          // Phải gọi mini_curl_response_free_error để giải phóng
+    char* headers;         // Response headers (format: "Header1: Value1\nHeader2: Value2"), phải gọi mini_curl_response_free để giải phóng
 } MiniCurlResponse;
 
 // Options structure

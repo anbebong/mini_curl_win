@@ -59,6 +59,25 @@ static void ParseCustomHeaders(const char* customHeaders, HttpOptions& httpOptio
     }
 }
 
+// Helper function để convert headers map thành string
+static char* ConvertHeadersToString(const std::map<std::string, std::string>& headers) {
+    if (headers.empty()) {
+        return NULL;
+    }
+    
+    std::string headersStr;
+    for (const auto& header : headers) {
+        if (!headersStr.empty()) {
+            headersStr += "\n";
+        }
+        headersStr += header.first + ": " + header.second;
+    }
+    
+    char* result = (char*)malloc(headersStr.length() + 1);
+    strcpy(result, headersStr.c_str());
+    return result;
+}
+
 extern "C" {
 
 MiniCurlHandle mini_curl_c_create(void) {
@@ -102,6 +121,7 @@ MiniCurlResponse* mini_curl_c_get(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Invalid handle or URL");
+        response->headers = NULL;
         return response;
     }
     
@@ -113,6 +133,7 @@ MiniCurlResponse* mini_curl_c_get(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Not initialized");
+        response->headers = NULL;
         return response;
     }
     
@@ -158,6 +179,21 @@ MiniCurlResponse* mini_curl_c_get(MiniCurlHandle handle,
         response->error = NULL;
     }
     
+    // Convert headers map to string
+    if (!httpResponse.headers.empty()) {
+        std::string headersStr;
+        for (const auto& header : httpResponse.headers) {
+            if (!headersStr.empty()) {
+                headersStr += "\n";
+            }
+            headersStr += header.first + ": " + header.second;
+        }
+        response->headers = (char*)malloc(headersStr.length() + 1);
+        strcpy(response->headers, headersStr.c_str());
+    } else {
+        response->headers = NULL;
+    }
+    
     return response;
 }
 
@@ -173,6 +209,7 @@ MiniCurlResponse* mini_curl_c_post(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Invalid handle or URL");
+        response->headers = NULL;
         return response;
     }
     
@@ -184,6 +221,7 @@ MiniCurlResponse* mini_curl_c_post(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Not initialized");
+        response->headers = NULL;
         return response;
     }
     
@@ -228,6 +266,9 @@ MiniCurlResponse* mini_curl_c_post(MiniCurlHandle handle,
         response->error = NULL;
     }
     
+    // Convert headers
+    response->headers = ConvertHeadersToString(httpResponse.headers);
+    
     return response;
 }
 
@@ -243,6 +284,7 @@ MiniCurlResponse* mini_curl_c_put(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Invalid handle or URL");
+        response->headers = NULL;
         return response;
     }
     
@@ -254,6 +296,7 @@ MiniCurlResponse* mini_curl_c_put(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Not initialized");
+        response->headers = NULL;
         return response;
     }
     
@@ -293,6 +336,9 @@ MiniCurlResponse* mini_curl_c_put(MiniCurlHandle handle,
         response->error = NULL;
     }
     
+    // Convert headers
+    response->headers = ConvertHeadersToString(httpResponse.headers);
+    
     return response;
 }
 
@@ -306,6 +352,7 @@ MiniCurlResponse* mini_curl_c_delete(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Invalid handle or URL");
+        response->headers = NULL;
         return response;
     }
     
@@ -317,6 +364,7 @@ MiniCurlResponse* mini_curl_c_delete(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Not initialized");
+        response->headers = NULL;
         return response;
     }
     
@@ -352,6 +400,9 @@ MiniCurlResponse* mini_curl_c_delete(MiniCurlHandle handle,
         response->error = NULL;
     }
     
+    // Convert headers
+    response->headers = ConvertHeadersToString(httpResponse.headers);
+    
     return response;
 }
 
@@ -367,6 +418,7 @@ MiniCurlResponse* mini_curl_c_patch(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Invalid handle or URL");
+        response->headers = NULL;
         return response;
     }
     
@@ -378,6 +430,7 @@ MiniCurlResponse* mini_curl_c_patch(MiniCurlHandle handle,
         response->bodySize = 0;
         response->error = (char*)malloc(64);
         strcpy(response->error, "Not initialized");
+        response->headers = NULL;
         return response;
     }
     
@@ -416,6 +469,9 @@ MiniCurlResponse* mini_curl_c_patch(MiniCurlHandle handle,
     } else {
         response->error = NULL;
     }
+    
+    // Convert headers
+    response->headers = ConvertHeadersToString(httpResponse.headers);
     
     return response;
 }
@@ -483,6 +539,9 @@ MiniCurlResponse* mini_curl_c_request(MiniCurlHandle handle,
         response->error = NULL;
     }
     
+    // Convert headers
+    response->headers = ConvertHeadersToString(httpResponse.headers);
+    
     return response;
 }
 
@@ -494,6 +553,9 @@ void mini_curl_c_response_free(MiniCurlResponse* response) {
     }
     if (response->error) {
         free(response->error);
+    }
+    if (response->headers) {
+        free(response->headers);
     }
     free(response);
 }
