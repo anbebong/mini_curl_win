@@ -336,7 +336,7 @@ static void PrintUsage(const char *program_name) {
     printf("\n");
     printf("Examples:\n");
     printf("  %s config.json\n", program_name);
-    printf("  %s http://0.0.0.0:8085 https://auth.example.com/token client-id client-secret http://localhost:8085/callback\n", program_name);
+    printf("  %s http://localhost:8085 https://auth.example.com/token client-id client-secret http://localhost:8085/callback\n", program_name);
     printf("\n");
 }
 

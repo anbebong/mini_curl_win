@@ -6,6 +6,6 @@
   "token_file": "token.json",
   "verify_ssl": true,
   "save_token": false,
-  "listening_addr": "http://0.0.0.0:8085"
+  "listening_addr": "http://localhost:8085"
 }
 

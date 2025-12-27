@@ -79,7 +79,7 @@ static void ConvertConfig(const MiniHttpServerConfig* c_config, OidcConfig& cpp_
     cpp_config.client_id = c_config->client_id ? c_config->client_id : "";
     cpp_config.client_secret = c_config->client_secret ? c_config->client_secret : "";
     cpp_config.token_file = c_config->token_file ? c_config->token_file : "";
-    cpp_config.listening_addr = c_config->listening_addr ? c_config->listening_addr : "http://0.0.0.0:8085";
+    cpp_config.listening_addr = c_config->listening_addr ? c_config->listening_addr : "http://localhost:8085";
     cpp_config.verify_ssl = c_config->verify_ssl;
     cpp_config.save_token = c_config->save_token;
 }
@@ -209,8 +209,8 @@ MiniHttpServerConfig* MiniHttpServerConfig_New(void) {
     if (config) {
         config->verify_ssl = true;
         config->save_token = false;
-        config->listening_addr = (char*)malloc(strlen("http://0.0.0.0:8085") + 1);
-        strcpy(config->listening_addr, "http://0.0.0.0:8085");
+        config->listening_addr = (char*)malloc(strlen("http://localhost:8085") + 1);
+        strcpy(config->listening_addr, "http://localhost:8085");
     }
     return config;
 }

@@ -39,11 +39,14 @@ typedef struct {
     const char* customHeaders;
 } MiniCurlOptions;
 
-// Exported functions (sẽ được export từ DLL)
+// Exported functions
 // Sử dụng __declspec(dllexport) khi build DLL
 // Sử dụng __declspec(dllimport) khi link với DLL
+// Không dùng import/export khi link static
 
-#ifdef MINI_CURL_C_EXPORTS
+#ifdef MINI_CURL_STATIC
+    #define MINI_CURL_C_API
+#elif defined(MINI_CURL_C_EXPORTS)
     #define MINI_CURL_C_API __declspec(dllexport)
 #else
     #define MINI_CURL_C_API __declspec(dllimport)

@@ -17,9 +17,9 @@ struct OidcConfig {
     bool save_token;               // true = lưu token vào file, false = chỉ in ra console (default: false)
     
     // Server configuration
-    std::string listening_addr;    // Listening address (ví dụ: "http://0.0.0.0:8085")
+    std::string listening_addr;    // Listening address (ví dụ: "http://localhost:8085")
     
-    OidcConfig() : verify_ssl(true), save_token(false), listening_addr("http://0.0.0.0:8085") {}
+    OidcConfig() : verify_ssl(true), save_token(false), listening_addr("http://localhost:8085") {}
 };
 
 // Đọc cấu hình từ file JSON
@@ -32,7 +32,7 @@ struct OidcConfig {
 //   "client_secret": "your-secret",
 //   "token_file": "token.json",
 //   "verify_ssl": true,
-//   "listening_addr": "http://0.0.0.0:8085"
+//   "listening_addr": "http://localhost:8085"
 // }
 //
 // Parameters:
@@ -76,7 +76,7 @@ bool LoadOidcConfigFromParams(
 );
 
 // Default values
-#define DEFAULT_LISTENING_ADDR "http://0.0.0.0:8085"
+#define DEFAULT_LISTENING_ADDR "http://localhost:8085"
 #define DEFAULT_REDIRECT_URI "http://localhost:8085/callback"
 #define DEFAULT_TOKEN_FILE "token.json"
 #define DEFAULT_VERIFY_SSL true

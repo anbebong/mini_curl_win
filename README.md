@@ -226,7 +226,7 @@ Có thể cấu hình OIDC qua:
   "token_file": "token.json",
   "verify_ssl": true,
   "save_token": false,
-  "listening_addr": "http://0.0.0.0:8085"
+  "listening_addr": "http://localhost:8085"
 }
 ```
 
@@ -239,7 +239,7 @@ set OIDC_REDIRECT_URI=http://localhost:8085/callback
 
 3. **Command line parameters**:
 ```bash
-example_oidc.exe http://0.0.0.0:8085 https://auth.example.com/token client-id client-secret http://localhost:8085/callback
+example_oidc.exe http://localhost:8085 https://auth.example.com/token client-id client-secret http://localhost:8085/callback
 ```
 
 ## External Dependencies

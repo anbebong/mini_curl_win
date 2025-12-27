@@ -17,22 +17,40 @@
 #include "mini_http_server.h"
 #include "../mini_curl/include/mini_curl_c.h"
 
-// Function pointer types cho mini_curl DLL
-typedef MiniCurlHandle (*create_fn)(void);
-typedef void (*destroy_fn)(MiniCurlHandle);
-typedef int (*init_fn)(MiniCurlHandle);
-typedef void (*cleanup_fn)(MiniCurlHandle);
-typedef MiniCurlResponse* (*get_fn)(MiniCurlHandle, const char*, const MiniCurlOptions*);
-typedef void (*free_fn)(MiniCurlResponse*);
+// Sử dụng static library - dùng trực tiếp functions
+#ifdef MINI_CURL_STATIC
+    // Dùng trực tiếp functions từ static library
+    #define CURL_CREATE() mini_curl_c_create()
+    #define CURL_DESTROY(h) mini_curl_c_destroy(h)
+    #define CURL_INIT(h) mini_curl_c_init(h)
+    #define CURL_CLEANUP(h) mini_curl_c_cleanup(h)
+    #define CURL_GET(h, url, opts) mini_curl_c_get(h, url, opts)
+    #define CURL_FREE(r) mini_curl_c_response_free(r)
+#else
+    // DLL loading - sử dụng function pointers
+    typedef MiniCurlHandle (*create_fn)(void);
+    typedef void (*destroy_fn)(MiniCurlHandle);
+    typedef int (*init_fn)(MiniCurlHandle);
+    typedef void (*cleanup_fn)(MiniCurlHandle);
+    typedef MiniCurlResponse* (*get_fn)(MiniCurlHandle, const char*, const MiniCurlOptions*);
+    typedef void (*free_fn)(MiniCurlResponse*);
 
-// Global DLL handle và function pointers
-static HMODULE g_dll_handle = NULL;
-static create_fn g_curl_create = NULL;
-static destroy_fn g_curl_destroy = NULL;
-static init_fn g_curl_init = NULL;
-static cleanup_fn g_curl_cleanup = NULL;
-static get_fn g_curl_get = NULL;
-static free_fn g_curl_free = NULL;
+    // Global DLL handle và function pointers
+    static HMODULE g_dll_handle = NULL;
+    static create_fn g_curl_create = NULL;
+    static destroy_fn g_curl_destroy = NULL;
+    static init_fn g_curl_init = NULL;
+    static cleanup_fn g_curl_cleanup = NULL;
+    static get_fn g_curl_get = NULL;
+    static free_fn g_curl_free = NULL;
+    
+    #define CURL_CREATE() g_curl_create()
+    #define CURL_DESTROY(h) g_curl_destroy(h)
+    #define CURL_INIT(h) g_curl_init(h)
+    #define CURL_CLEANUP(h) g_curl_cleanup(h)
+    #define CURL_GET(h, url, opts) g_curl_get(h, url, opts)
+    #define CURL_FREE(r) g_curl_free(r)
+#endif
 
 // Global variables
 // Token có thể rất dài (JWT tokens thường 1000-2000+ ký tự), tăng lên 8192 để an toàn
@@ -46,8 +64,10 @@ static char g_nonce[64] = {0};
 static MiniHttpServerConfig* g_oidc_config = NULL;  // Lưu config để có thể re-authenticate
 
 // Forward declarations
+#ifndef MINI_CURL_STATIC
 int LoadMiniCurlDLL(const char* dll_path);
 void UnloadMiniCurlDLL(void);
+#endif
 int is_token_valid(void);
 void clear_token(void);
 void trigger_reauth(void);
@@ -153,7 +173,8 @@ void on_error(const char* error, const char* error_description, void* user_data)
     printf("==================\n\n");
 }
 
-// Load mini_curl DLL
+#ifndef MINI_CURL_STATIC
+// Load mini_curl DLL (chỉ cần khi dùng DLL)
 int LoadMiniCurlDLL(const char* dll_path) {
     if (g_dll_handle) {
         return 1; // Đã load rồi
@@ -199,8 +220,9 @@ void UnloadMiniCurlDLL(void) {
         g_curl_free = NULL;
     }
 }
+#endif
 
-// Gọi API sử dụng token đã nhận được (load từ DLL)
+// Gọi API sử dụng token đã nhận được
 void call_api_with_token(void) {
     // Kiểm tra token hợp lệ trước khi gọi API
     if (!is_token_valid()) {
@@ -214,23 +236,25 @@ void call_api_with_token(void) {
         return;
     }
     
-    // Đảm bảo DLL đã được load
+#ifndef MINI_CURL_STATIC
+    // Đảm bảo DLL đã được load (chỉ cần khi dùng DLL)
     if (!g_dll_handle && !LoadMiniCurlDLL(NULL)) {
         printf("Error: Failed to load mini_curl DLL\n");
         return;
     }
+#endif
     
-    // Tạo HTTP client từ DLL
-    MiniCurlHandle curl = g_curl_create();
+    // Tạo HTTP client
+    MiniCurlHandle curl = CURL_CREATE();
     if (!curl) {
-        printf("Failed to create HTTP client from DLL!\n");
+        printf("Failed to create HTTP client!\n");
         return;
     }
     
     // Khởi tạo client
-    if (!g_curl_init(curl)) {
-        printf("Failed to initialize HTTP client from DLL!\n");
-        g_curl_destroy(curl);
+    if (!CURL_INIT(curl)) {
+        printf("Failed to initialize HTTP client!\n");
+        CURL_DESTROY(curl);
         return;
     }
     
@@ -256,7 +280,7 @@ void call_api_with_token(void) {
     printf("Calling: %s\n", url);
     printf("Using token: %.20s...\n", g_access_token);
     
-    MiniCurlResponse* response = g_curl_get(curl, url, &options);
+    MiniCurlResponse* response = CURL_GET(curl, url, &options);
     
     // Kiểm tra kết quả
     if (response) {
@@ -302,22 +326,24 @@ void call_api_with_token(void) {
         }
         
         // Giải phóng response
-        g_curl_free(response);
+        CURL_FREE(response);
     } else {
-        printf("Error: Failed to get response from DLL\n");
+        printf("Error: Failed to get response\n");
     }
     
     printf("\n");
     printf("=== Done ===\n");
     
     // Cleanup
-    g_curl_cleanup(curl);
-    g_curl_destroy(curl);
+    CURL_CLEANUP(curl);
+    CURL_DESTROY(curl);
 }
 
 // Cleanup khi exit
 void cleanup_on_exit(void) {
+#ifndef MINI_CURL_STATIC
     UnloadMiniCurlDLL();
+#endif
     DeleteCriticalSection(&g_token_cs);
 }
 
@@ -451,11 +477,15 @@ int main(int argc, char *argv[]) {
     // Initialize critical section
     InitializeCriticalSection(&g_token_cs);
     
-    // Load mini_curl DLL
+#ifdef MINI_CURL_STATIC
+    printf("Using mini_curl static library.\n\n");
+#else
+    // Load mini_curl DLL (chỉ cần khi dùng DLL)
     if (!LoadMiniCurlDLL(NULL)) {
         printf("Warning: Failed to load mini_curl DLL. API calls may fail.\n");
         printf("Make sure libmini_curl.dll is in the same directory or in PATH.\n\n");
     }
+#endif
     
     // Parse API base URL từ command line (optional)
     if (argc > 6) {

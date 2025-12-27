@@ -24,7 +24,7 @@ typedef struct {
     char* token_file;           // File để lưu tokens (NULL = không lưu)
     bool verify_ssl;            // true = verify SSL, false = skip
     bool save_token;            // true = lưu token vào file, false = chỉ in ra console
-    char* listening_addr;       // Listening address (ví dụ: "http://0.0.0.0:8085")
+    char* listening_addr;       // Listening address (ví dụ: "http://localhost:8085")
 } MiniHttpServerConfig;
 
 // Callback function type cho OIDC token exchange success
