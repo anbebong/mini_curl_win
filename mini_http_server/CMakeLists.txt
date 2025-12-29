@@ -9,23 +9,77 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(STATUS "Using MinGW-w64 compiler")
 endif()
 
-# Fetch Mongoose library từ GitHub (external dependency)
-# Sẽ tự động tải về khi build, không cần có trong repo
-include(FetchContent)
+# Download Mongoose library từ GitHub (external dependency)
+# Sử dụng file download thay vì git để tránh phụ thuộc vào git trong Docker
+set(MONGOOSE_VERSION "7.20")
+set(MONGOOSE_URL "https://github.com/cesanta/mongoose/archive/refs/tags/${MONGOOSE_VERSION}.tar.gz")
+set(MONGOOSE_DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/_deps/mongoose-download")
+set(MONGOOSE_EXTRACT_DIR "${CMAKE_BINARY_DIR}/_deps/mongoose-${MONGOOSE_VERSION}")
+set(MONGOOSE_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/mongoose-src")
 
-FetchContent_Declare(
-    mongoose
-    GIT_REPOSITORY https://github.com/cesanta/mongoose.git
-    GIT_TAG        7.20  # Sử dụng version 7.12 (stable)
-    GIT_SHALLOW    TRUE  # Chỉ clone shallow để tiết kiệm thời gian
-)
+# Kiểm tra xem mongoose đã được download chưa
+if(NOT EXISTS "${MONGOOSE_SOURCE_DIR}/mongoose.c")
+    message(STATUS "Downloading Mongoose library from GitHub (version ${MONGOOSE_VERSION})...")
+    
+    # Tạo thư mục download
+    file(MAKE_DIRECTORY "${MONGOOSE_DOWNLOAD_DIR}")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/_deps")
+    
+    # Download file tar.gz
+    set(MONGOOSE_ARCHIVE "${MONGOOSE_DOWNLOAD_DIR}/mongoose-${MONGOOSE_VERSION}.tar.gz")
+    
+    # Sử dụng file(DOWNLOAD) thay vì git
+    file(DOWNLOAD 
+        "${MONGOOSE_URL}"
+        "${MONGOOSE_ARCHIVE}"
+        TIMEOUT 60
+        STATUS DOWNLOAD_STATUS
+        SHOW_PROGRESS
+    )
+    
+    # Kiểm tra kết quả download
+    list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+    if(NOT STATUS_CODE EQUAL 0)
+        list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
+        message(FATAL_ERROR "Failed to download mongoose: ${ERROR_MESSAGE}")
+    endif()
+    
+    # Extract tar.gz
+    message(STATUS "Extracting Mongoose library...")
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E tar xzf "${MONGOOSE_ARCHIVE}"
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/_deps"
+        RESULT_VARIABLE EXTRACT_RESULT
+        OUTPUT_QUIET
+        ERROR_QUIET
+    )
+    
+    if(NOT EXTRACT_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to extract mongoose archive")
+    endif()
+    
+    # Kiểm tra và rename extracted directory
+    if(EXISTS "${MONGOOSE_EXTRACT_DIR}/mongoose.c")
+        # Directory đã được extract đúng
+        if(EXISTS "${MONGOOSE_SOURCE_DIR}")
+            file(REMOVE_RECURSE "${MONGOOSE_SOURCE_DIR}")
+        endif()
+        file(RENAME 
+            "${MONGOOSE_EXTRACT_DIR}"
+            "${MONGOOSE_SOURCE_DIR}"
+        )
+    else()
+        message(FATAL_ERROR "Mongoose extraction failed: mongoose.c not found in ${MONGOOSE_EXTRACT_DIR}")
+    endif()
+    
+    message(STATUS "Mongoose downloaded and extracted to: ${MONGOOSE_SOURCE_DIR}")
+else()
+    message(STATUS "Mongoose already available at: ${MONGOOSE_SOURCE_DIR}")
+endif()
 
-# Tải mongoose về (nếu chưa có)
-FetchContent_GetProperties(mongoose)
-if(NOT mongoose_POPULATED)
-    message(STATUS "Downloading Mongoose library from GitHub...")
-    FetchContent_Populate(mongoose)
-    message(STATUS "Mongoose downloaded to: ${mongoose_SOURCE_DIR}")
+# Đảm bảo MONGOOSE_SOURCE_DIR được set đúng
+if(NOT EXISTS "${MONGOOSE_SOURCE_DIR}/mongoose.c")
+    message(FATAL_ERROR "Mongoose source not found at: ${MONGOOSE_SOURCE_DIR}/mongoose.c")
 endif()
 
 # Option to build as DLL or static library
@@ -37,7 +91,7 @@ if(BUILD_SHARED_LIBS)
         src/oidc_config.cpp
         src/oidc_token_exchange.cpp
         src/mini_http_server_c.cpp
-        ${mongoose_SOURCE_DIR}/mongoose.c
+        ${MONGOOSE_SOURCE_DIR}/mongoose.c
     )
     target_compile_definitions(mini_http_server PRIVATE BUILD_DLL MINI_HTTP_SERVER_EXPORTS)
     target_compile_definitions(mini_http_server PUBLIC MINI_HTTP_SERVER_EXPORTS)
@@ -47,7 +101,7 @@ else()
         src/oidc_config.cpp
         src/oidc_token_exchange.cpp
         src/mini_http_server_c.cpp
-        ${mongoose_SOURCE_DIR}/mongoose.c
+        ${MONGOOSE_SOURCE_DIR}/mongoose.c
     )
     target_compile_definitions(mini_http_server PUBLIC MINI_HTTP_SERVER_STATIC)
     message(STATUS "Building mini_http_server as STATIC library")
@@ -59,20 +113,53 @@ target_include_directories(mini_http_server PUBLIC
 )
 
 target_include_directories(mini_http_server PRIVATE 
-    ${mongoose_SOURCE_DIR}
+    ${MONGOOSE_SOURCE_DIR}
     src
 )
 
-# Link với mini_curl library (từ parent project)
-if(TARGET mini_curl)
-    target_link_libraries(mini_http_server mini_curl)
-else()
-    message(FATAL_ERROR "mini_curl library not found. Please build from root CMakeLists.txt or add mini_curl as subdirectory")
-endif()
-
-# Link Winsock và WinHTTP libraries cho Windows
+# Link HTTP client library - phân biệt Windows và Linux
 if(WIN32)
+    # Windows: Sử dụng mini_curl (WinHTTP)
+    if(TARGET mini_curl)
+        target_link_libraries(mini_http_server mini_curl)
+        target_compile_definitions(mini_http_server PRIVATE USE_MINI_CURL)
+    else()
+        message(FATAL_ERROR "mini_curl library not found. Please build from root CMakeLists.txt or add mini_curl as subdirectory")
+    endif()
+    # Link Winsock và WinHTTP libraries cho Windows
     target_link_libraries(mini_http_server ws2_32 winhttp)
+else()
+    # Linux: Chỉ sử dụng libcurl từ external (không dùng system)
+    # Tìm libcurl từ external/curl (static)
+    set(CURL_LIB_DIR "${CMAKE_SOURCE_DIR}/../curl/lib/.libs")
+    set(CURL_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/../curl/include")
+    
+    # Kiểm tra libcurl.a có tồn tại không
+    if(EXISTS "${CURL_LIB_DIR}/libcurl.a")
+        target_link_libraries(mini_http_server "${CURL_LIB_DIR}/libcurl.a")
+        target_include_directories(mini_http_server PRIVATE "${CURL_INCLUDE_DIR}")
+        target_compile_definitions(mini_http_server PRIVATE USE_LIBCURL)
+        message(STATUS "Using static libcurl from: ${CURL_LIB_DIR}/libcurl.a")
+        
+        # Link với OpenSSL và zlib (nếu có)
+        if(EXISTS "${CMAKE_SOURCE_DIR}/../openssl/libssl.a")
+            target_link_libraries(mini_http_server 
+                "${CMAKE_SOURCE_DIR}/../openssl/libssl.a"
+                "${CMAKE_SOURCE_DIR}/../openssl/libcrypto.a"
+            )
+            target_include_directories(mini_http_server PRIVATE "${CMAKE_SOURCE_DIR}/../../openssl/include")
+        endif()
+        
+        if(EXISTS "${CMAKE_SOURCE_DIR}/../zlib/libz.a")
+            target_link_libraries(mini_http_server "${CMAKE_SOURCE_DIR}/../zlib/libz.a")
+            target_include_directories(mini_http_server PRIVATE "${CMAKE_SOURCE_DIR}/../zlib")
+        endif()
+    else()
+        message(FATAL_ERROR "libcurl.a not found in ${CURL_LIB_DIR}. Please build curl in external/curl first.")
+    endif()
+    
+    # Link với pthread và các thư viện hệ thống cần thiết cho Linux
+    target_link_libraries(mini_http_server pthread dl)
 endif()
 
 # Install rules

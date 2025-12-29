@@ -1,7 +1,63 @@
 // OIDC Token Exchange Implementation
 
 #include "../include/oidc_token_exchange.h"
-#include "winhttp_curl.h"  // Include từ mini_curl (được thêm qua target_link_libraries)
+
+// Platform-specific HTTP client includes
+#ifdef USE_MINI_CURL
+    // Windows: Sử dụng mini_curl (WinHTTP)
+    #include "winhttp_curl.h"
+#elif defined(USE_LIBCURL)
+    // Linux: Sử dụng libcurl
+    #include <curl/curl.h>
+    #include <map>
+    #include <string>
+    // Định nghĩa HttpResponse và HttpOptions cho Linux (tương tự winhttp_curl.h)
+    struct HttpResponse {
+        int statusCode;
+        std::string body;
+        std::map<std::string, std::string> headers;
+        std::string error;
+        HttpResponse() : statusCode(0) {}
+    };
+    struct HttpOptions {
+        std::map<std::string, std::string> headers;
+        std::string userAgent;
+        int timeout;
+        bool followRedirects;
+        bool verifySSL;
+        HttpOptions() : timeout(30), followRedirects(true), verifySSL(true) {
+            userAgent = "libcurl/1.0";
+        }
+    };
+#else
+    // Fallback: thử detect tự động
+    #ifdef _WIN32
+        #include "winhttp_curl.h"
+    #else
+        #include <curl/curl.h>
+        #include <map>
+        #include <string>
+        // Định nghĩa HttpResponse và HttpOptions cho Linux
+        struct HttpResponse {
+            int statusCode;
+            std::string body;
+            std::map<std::string, std::string> headers;
+            std::string error;
+            HttpResponse() : statusCode(0) {}
+        };
+        struct HttpOptions {
+            std::map<std::string, std::string> headers;
+            std::string userAgent;
+            int timeout;
+            bool followRedirects;
+            bool verifySSL;
+            HttpOptions() : timeout(30), followRedirects(true), verifySSL(true) {
+                userAgent = "libcurl/1.0";
+            }
+        };
+    #endif
+#endif
+
 #include <sstream>
 #include <iomanip>
 #include <cctype>
@@ -182,14 +238,6 @@ OidcTokenResponse ExchangeOidcToken(
         return encoded.str();
     };
     
-    // Initialize WinHTTP client
-    WinHttpCurl client;
-    if (!client.Init()) {
-        response.error = "Failed to initialize HTTP client";
-        response.error_description = "Cannot initialize WinHTTP session";
-        return response;
-    }
-    
     // Build POST data (application/x-www-form-urlencoded)
     // Format theo OAuth 2.0 Authorization Code Grant
     std::ostringstream postData;
@@ -201,6 +249,18 @@ OidcTokenResponse ExchangeOidcToken(
         postData << "&client_secret=" << urlEncode(clientSecret);
     }
     
+    // Platform-specific HTTP client implementation
+    HttpResponse httpResponse;
+    
+#ifdef USE_MINI_CURL
+    // Windows: Sử dụng mini_curl (WinHTTP)
+    WinHttpCurl client;
+    if (!client.Init()) {
+        response.error = "Failed to initialize HTTP client";
+        response.error_description = "Cannot initialize WinHTTP session";
+        return response;
+    }
+    
     // Set HTTP headers
     HttpOptions options;
     options.verifySSL = verifySSL;
@@ -208,10 +268,68 @@ OidcTokenResponse ExchangeOidcToken(
     options.headers["Accept"] = "application/json";
     
     // Make POST request đến token endpoint
-    HttpResponse httpResponse = client.Post(tokenEndpoint, postData.str(), options);
+    httpResponse = client.Post(tokenEndpoint, postData.str(), options);
     
     // Cleanup HTTP client
     client.Cleanup();
+#else
+    // Linux: Sử dụng libcurl
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        response.error = "Failed to initialize HTTP client";
+        response.error_description = "Cannot initialize libcurl";
+        return response;
+    }
+    
+    // Response data structure
+    struct ResponseData {
+        std::string data;
+        long statusCode;
+    } responseData;
+    responseData.statusCode = 0;
+    
+    // Write callback
+    auto writeCallback = [](char* ptr, size_t size, size_t nmemb, void* userdata) -> size_t {
+        ResponseData* rd = (ResponseData*)userdata;
+        rd->data.append(ptr, size * nmemb);
+        return size * nmemb;
+    };
+    
+    // Set curl options
+    curl_easy_setopt(curl, CURLOPT_URL, tokenEndpoint.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.str().c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    
+    // SSL verification
+    if (!verifySSL) {
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    }
+    
+    // Set headers
+    struct curl_slist* headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+    headers = curl_slist_append(headers, "Accept: application/json");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    
+    // Perform request
+    CURLcode res = curl_easy_perform(curl);
+    
+    if (res == CURLE_OK) {
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseData.statusCode);
+        httpResponse.statusCode = responseData.statusCode;
+        httpResponse.body = responseData.data;
+    } else {
+        httpResponse.statusCode = 0;
+        httpResponse.error = curl_easy_strerror(res);
+    }
+    
+    // Cleanup
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+#endif
     
     // Check HTTP response status
     if (httpResponse.statusCode != 200) {

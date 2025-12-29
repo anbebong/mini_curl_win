@@ -166,8 +166,11 @@ MiniCurlResponse* mini_curl_c_get(MiniCurlHandle handle,
     response->bodySize = httpResponse.body.length();
     
     if (httpResponse.body.length() > 0) {
-        response->body = (char*)malloc(httpResponse.body.length() + 1);
-        strcpy(response->body, httpResponse.body.c_str());
+        // Dùng memcpy thay vì strcpy để copy binary data đúng cách (không dừng khi gặp null byte)
+        response->body = (char*)malloc(httpResponse.body.length());
+        if (response->body) {
+            memcpy(response->body, httpResponse.body.data(), httpResponse.body.length());
+        }
     } else {
         response->body = NULL;
     }
@@ -253,8 +256,11 @@ MiniCurlResponse* mini_curl_c_post(MiniCurlHandle handle,
     response->bodySize = httpResponse.body.length();
     
     if (httpResponse.body.length() > 0) {
-        response->body = (char*)malloc(httpResponse.body.length() + 1);
-        strcpy(response->body, httpResponse.body.c_str());
+        // Dùng memcpy thay vì strcpy để copy binary data đúng cách (không dừng khi gặp null byte)
+        response->body = (char*)malloc(httpResponse.body.length());
+        if (response->body) {
+            memcpy(response->body, httpResponse.body.data(), httpResponse.body.length());
+        }
     } else {
         response->body = NULL;
     }
@@ -323,8 +329,11 @@ MiniCurlResponse* mini_curl_c_put(MiniCurlHandle handle,
     response->bodySize = httpResponse.body.length();
     
     if (httpResponse.body.length() > 0) {
-        response->body = (char*)malloc(httpResponse.body.length() + 1);
-        strcpy(response->body, httpResponse.body.c_str());
+        // Dùng memcpy thay vì strcpy để copy binary data đúng cách (không dừng khi gặp null byte)
+        response->body = (char*)malloc(httpResponse.body.length());
+        if (response->body) {
+            memcpy(response->body, httpResponse.body.data(), httpResponse.body.length());
+        }
     } else {
         response->body = NULL;
     }
@@ -387,8 +396,11 @@ MiniCurlResponse* mini_curl_c_delete(MiniCurlHandle handle,
     response->bodySize = httpResponse.body.length();
     
     if (httpResponse.body.length() > 0) {
-        response->body = (char*)malloc(httpResponse.body.length() + 1);
-        strcpy(response->body, httpResponse.body.c_str());
+        // Dùng memcpy thay vì strcpy để copy binary data đúng cách (không dừng khi gặp null byte)
+        response->body = (char*)malloc(httpResponse.body.length());
+        if (response->body) {
+            memcpy(response->body, httpResponse.body.data(), httpResponse.body.length());
+        }
     } else {
         response->body = NULL;
     }
@@ -457,8 +469,11 @@ MiniCurlResponse* mini_curl_c_patch(MiniCurlHandle handle,
     response->bodySize = httpResponse.body.length();
     
     if (httpResponse.body.length() > 0) {
-        response->body = (char*)malloc(httpResponse.body.length() + 1);
-        strcpy(response->body, httpResponse.body.c_str());
+        // Dùng memcpy thay vì strcpy để copy binary data đúng cách (không dừng khi gặp null byte)
+        response->body = (char*)malloc(httpResponse.body.length());
+        if (response->body) {
+            memcpy(response->body, httpResponse.body.data(), httpResponse.body.length());
+        }
     } else {
         response->body = NULL;
     }
@@ -526,8 +541,11 @@ MiniCurlResponse* mini_curl_c_request(MiniCurlHandle handle,
     response->bodySize = httpResponse.body.length();
     
     if (httpResponse.body.length() > 0) {
-        response->body = (char*)malloc(httpResponse.body.length() + 1);
-        strcpy(response->body, httpResponse.body.c_str());
+        // Dùng memcpy thay vì strcpy để copy binary data đúng cách (không dừng khi gặp null byte)
+        response->body = (char*)malloc(httpResponse.body.length());
+        if (response->body) {
+            memcpy(response->body, httpResponse.body.data(), httpResponse.body.length());
+        }
     } else {
         response->body = NULL;
     }
