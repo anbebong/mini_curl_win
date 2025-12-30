@@ -64,6 +64,44 @@
 #include <fstream>
 #include <algorithm>
 #include <ctime>
+#include <cstring>
+
+// Global structures and callbacks for libcurl
+struct ResponseData {
+    char data[8192];
+    long statusCode;
+};
+
+static size_t writeCallback(char* ptr, size_t size, size_t nmemb, void* userdata) {
+    printf("DEBUG: Write callback called, size=%zu\n", size * nmemb);
+    fflush(stdout);
+    ResponseData* rd = (ResponseData*)userdata;
+    size_t total = size * nmemb;
+    size_t current_len = strlen(rd->data);
+    if (current_len + total < sizeof(rd->data) - 1) {
+        memcpy(rd->data + current_len, ptr, total);
+        rd->data[current_len + total] = '\0';
+    }
+    return total;
+}
+
+// URL encode function
+static std::string urlEncode(const std::string& str) {
+    std::ostringstream encoded;
+    encoded.fill('0');
+    encoded << std::hex;
+    
+    for (char c : str) {
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            encoded << c;
+        } else if (c == ' ') {
+            encoded << '+';
+        } else {
+            encoded << '%' << std::setw(2) << int((unsigned char)c);
+        }
+    }
+    return encoded.str();
+}
 
 // Simple JSON parser để extract value từ JSON string
 // Hỗ trợ string và number types
@@ -132,6 +170,7 @@ static std::string ExtractJsonValue(const std::string& json, const std::string& 
 // Returns:
 //   Decoded string
 static std::string Base64Decode(const std::string& encoded) {
+    printf("DEBUG: Base64Decode called with length=%zu\n", encoded.length());
     const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string decoded;
     int val = 0, valb = -8;
@@ -163,16 +202,21 @@ static std::string Base64Decode(const std::string& encoded) {
 
 // Decode JWT payload (không verify signature)
 std::string DecodeJwtPayload(const std::string& jwt) {
+    printf("DEBUG: DecodeJwtPayload called with jwt length=%zu\n", jwt.length());
     // JWT format: header.payload.signature
     size_t dot1 = jwt.find('.');
     if (dot1 == std::string::npos) {
+        printf("DEBUG: No first dot found\n");
         return "";
     }
     
     size_t dot2 = jwt.find('.', dot1 + 1);
     if (dot2 == std::string::npos) {
+        printf("DEBUG: No second dot found\n");
         return "";
     }
+    
+    printf("DEBUG: Dots found at %zu and %zu\n", dot1, dot2);
     
     // Extract payload (phần giữa 2 dấu chấm)
     std::string payloadEncoded = jwt.substr(dot1 + 1, dot2 - dot1 - 1);
@@ -213,30 +257,13 @@ OidcTokenResponse ExchangeOidcToken(
     bool verifySSL) {
     
     OidcTokenResponse response;
-    
+    printf("DEBUG: ExchangeOidcToken called\n");
+    fflush(stdout);
     // Validate inputs
     if (tokenEndpoint.empty() || code.empty() || redirectUri.empty() || clientId.empty()) {
         response.error = "Missing required parameters";
         return response;
     }
-    
-    // URL encode function
-    auto urlEncode = [](const std::string& str) -> std::string {
-        std::ostringstream encoded;
-        encoded.fill('0');
-        encoded << std::hex;
-        
-        for (char c : str) {
-            if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-                encoded << c;
-            } else if (c == ' ') {
-                encoded << '+';
-            } else {
-                encoded << '%' << std::setw(2) << int((unsigned char)c);
-            }
-        }
-        return encoded.str();
-    };
     
     // Build POST data (application/x-www-form-urlencoded)
     // Format theo OAuth 2.0 Authorization Code Grant
@@ -274,48 +301,80 @@ OidcTokenResponse ExchangeOidcToken(
     client.Cleanup();
 #else
     // Linux: Sử dụng libcurl
+    printf("DEBUG: Creating curl handle\n");
+    fflush(stdout);
     CURL* curl = curl_easy_init();
     if (!curl) {
+        printf("DEBUG: Failed to create curl handle\n");
+        fflush(stdout);
         response.error = "Failed to initialize HTTP client";
         response.error_description = "Cannot initialize libcurl";
         return response;
     }
+    printf("DEBUG: Curl handle created\n");
+    fflush(stdout);
     
     // Response data structure
-    struct ResponseData {
-        std::string data;
-        long statusCode;
-    } responseData;
+    ResponseData responseData;
     responseData.statusCode = 0;
     
-    // Write callback
-    auto writeCallback = [](char* ptr, size_t size, size_t nmemb, void* userdata) -> size_t {
-        ResponseData* rd = (ResponseData*)userdata;
-        rd->data.append(ptr, size * nmemb);
-        return size * nmemb;
-    };
-    
     // Set curl options
+    printf("DEBUG: Setting curl options\n");
+    fflush(stdout);
+    printf("DEBUG: Token endpoint: %s\n", tokenEndpoint.c_str());
+    fflush(stdout);
+    printf("DEBUG: POST data length: %zu\n", postData.str().length());
+    fflush(stdout);
+    printf("DEBUG: POST data: %.50s...\n", postData.str().c_str());
+    fflush(stdout);
     curl_easy_setopt(curl, CURLOPT_URL, tokenEndpoint.c_str());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.str().c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    
-    // SSL verification
-    if (!verifySSL) {
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-    }
+    printf("DEBUG: URL set\n");
+    fflush(stdout);
     
     // Set headers
+    printf("DEBUG: Setting headers\n");
+    fflush(stdout);
     struct curl_slist* headers = NULL;
-    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded; charset=utf-8");
+    std::string contentLength = "Content-Length: " + std::to_string(postData.str().length());
+    headers = curl_slist_append(headers, contentLength.c_str());
     headers = curl_slist_append(headers, "Accept: application/json");
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    printf("DEBUG: Headers set\n");
+    fflush(stdout);
+    
+    curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, postData.str().c_str());
+    printf("DEBUG: POST data set\n");
+    fflush(stdout);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+    printf("DEBUG: Write function set\n");
+    fflush(stdout);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseData);
+    printf("DEBUG: Write data set\n");
+    fflush(stdout);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    printf("DEBUG: Follow location set\n");
+    fflush(stdout);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);  // Disable signals for thread safety
+    printf("DEBUG: Nosignal set\n");
+    fflush(stdout);
+    
+    // SSL verification - disable for testing to avoid potential SSL-related segfaults
+    printf("DEBUG: Setting SSL options (disabled for testing)\n");
+    fflush(stdout);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
     
     // Perform request
+    printf("DEBUG: Curl handle pointer: %p\n", (void*)curl);
+    fflush(stdout);
+    printf("DEBUG: Performing request\n");
+    fflush(stdout);
     CURLcode res = curl_easy_perform(curl);
+    printf("DEBUG: Request completed with result: %d\n", res);
+    fflush(stdout);
+    printf("DEBUG: Response body: %s\n", responseData.data);
+    fflush(stdout);
     
     if (res == CURLE_OK) {
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseData.statusCode);

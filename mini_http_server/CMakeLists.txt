@@ -7,6 +7,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # MinGW specific settings
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(STATUS "Using MinGW-w64 compiler")
+    # Đảm bảo C++11 được bật cho MinGW
+    add_compile_options(-std=c++11)
+    # Thêm pthread support cho mutex (cần cho MinGW)
+    add_compile_options(-pthread)
+    add_link_options(-pthread)
+    # Thêm define cho MinGW để hỗ trợ C++11 features
+    add_compile_definitions(_GLIBCXX_USE_C99)
 endif()
 
 # Download Mongoose library từ GitHub (external dependency)
@@ -116,6 +123,19 @@ target_include_directories(mini_http_server PRIVATE
     ${MONGOOSE_SOURCE_DIR}
     src
 )
+
+# Đảm bảo C++11 được bật cho tất cả files
+set_target_properties(mini_http_server PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED ON
+)
+
+# Thêm define cho Windows/MinGW để hỗ trợ C++11 mutex
+if(WIN32)
+    target_compile_definitions(mini_http_server PRIVATE 
+        _WIN32_WINNT=0x0601  # Windows 7 or later
+    )
+endif()
 
 # Link HTTP client library - phân biệt Windows và Linux
 if(WIN32)

@@ -33,7 +33,7 @@ compile_commands.json
 mini_http_server/external/mongoose/
 **/external/*/
 !**/external/.gitkeep
-
+build*
 # Downloaded files
 *.zip
 *.tar.gz

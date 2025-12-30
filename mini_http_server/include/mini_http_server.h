@@ -120,6 +120,11 @@ int MiniHttpServer_Start(
 // Server sẽ chạy cho đến khi nhận SIGINT hoặc SIGTERM
 int MiniHttpServer_StartSimple(const char* listening_addr, void* user_data);
 
+// Stop HTTP server (gọi từ bất kỳ thread nào)
+// Hàm này sẽ signal server để dừng gracefully
+// Returns: 0 nếu thành công, non-zero nếu có lỗi
+int MiniHttpServer_Stop(void);
+
 #ifdef __cplusplus
 }
 #endif
