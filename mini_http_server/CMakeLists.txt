@@ -16,45 +16,31 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_definitions(_GLIBCXX_USE_C99)
 endif()
 
-# Download Mongoose library từ GitHub (external dependency)
-# Sử dụng file download thay vì git để tránh phụ thuộc vào git trong Docker
+# Chuẩn bị Mongoose library (external dependency)
+# Ưu tiên sử dụng file archive có sẵn thay vì tải từ mạng.
 set(MONGOOSE_VERSION "7.20")
-set(MONGOOSE_URL "https://github.com/cesanta/mongoose/archive/refs/tags/${MONGOOSE_VERSION}.tar.gz")
+set(MONGOOSE_LOCAL_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/external/mongoose-${MONGOOSE_VERSION}.tar.gz")
 set(MONGOOSE_DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/_deps/mongoose-download")
 set(MONGOOSE_EXTRACT_DIR "${CMAKE_BINARY_DIR}/_deps/mongoose-${MONGOOSE_VERSION}")
 set(MONGOOSE_SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/mongoose-src")
 
-# Kiểm tra xem mongoose đã được download chưa
+# Kiểm tra xem mongoose đã được chuẩn bị chưa
 if(NOT EXISTS "${MONGOOSE_SOURCE_DIR}/mongoose.c")
-    message(STATUS "Downloading Mongoose library from GitHub (version ${MONGOOSE_VERSION})...")
+    # Không tải từ mạng nữa, chỉ dùng archive local.
+    if(NOT EXISTS "${MONGOOSE_LOCAL_ARCHIVE}")
+        message(FATAL_ERROR "Local Mongoose archive not found: ${MONGOOSE_LOCAL_ARCHIVE}\n"
+                            "Please place mongoose-${MONGOOSE_VERSION}.tar.gz vào thư mục external/ hoặc cập nhật đường dẫn trong CMakeLists.")
+    endif()
+    message(STATUS "Using local Mongoose archive: ${MONGOOSE_LOCAL_ARCHIVE}")
     
-    # Tạo thư mục download
+    # Tạo thư mục extract
     file(MAKE_DIRECTORY "${MONGOOSE_DOWNLOAD_DIR}")
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/_deps")
     
-    # Download file tar.gz
-    set(MONGOOSE_ARCHIVE "${MONGOOSE_DOWNLOAD_DIR}/mongoose-${MONGOOSE_VERSION}.tar.gz")
-    
-    # Sử dụng file(DOWNLOAD) thay vì git
-    file(DOWNLOAD 
-        "${MONGOOSE_URL}"
-        "${MONGOOSE_ARCHIVE}"
-        TIMEOUT 60
-        STATUS DOWNLOAD_STATUS
-        SHOW_PROGRESS
-    )
-    
-    # Kiểm tra kết quả download
-    list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-    if(NOT STATUS_CODE EQUAL 0)
-        list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
-        message(FATAL_ERROR "Failed to download mongoose: ${ERROR_MESSAGE}")
-    endif()
-    
-    # Extract tar.gz
-    message(STATUS "Extracting Mongoose library...")
+    # Extract tar.gz từ archive local
+    message(STATUS "Extracting Mongoose library from local archive...")
     execute_process(
-        COMMAND ${CMAKE_COMMAND} -E tar xzf "${MONGOOSE_ARCHIVE}"
+        COMMAND ${CMAKE_COMMAND} -E tar xzf "${MONGOOSE_LOCAL_ARCHIVE}"
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/_deps"
         RESULT_VARIABLE EXTRACT_RESULT
         OUTPUT_QUIET
