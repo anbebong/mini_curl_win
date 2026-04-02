@@ -64,6 +64,11 @@ target_include_directories(mini_curl
 # Link WinHTTP library
 target_link_libraries(mini_curl winhttp)
 
+# Static link C++ runtime để tránh phụ thuộc libstdc++-6.dll
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_options(mini_curl PRIVATE -static-libgcc -static-libstdc++)
+endif()
+
 # Install rules
 install(TARGETS mini_curl
     RUNTIME DESTINATION bin
