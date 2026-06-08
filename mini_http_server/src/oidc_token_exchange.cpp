@@ -65,6 +65,13 @@
 #include <algorithm>
 #include <ctime>
 #include <cstring>
+#if defined(USE_LIBCURL)
+#include <openssl/rand.h>
+#include <openssl/evp.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#include <bcrypt.h>
+#endif
 
 // Global structures and callbacks for libcurl
 struct ResponseData {
@@ -101,6 +108,121 @@ static std::string urlEncode(const std::string& str) {
         }
     }
     return encoded.str();
+}
+
+static std::string base64UrlEncodeNoPadding(const unsigned char *data, size_t len) {
+    static const char tbl[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve(((len + 2) / 3) * 4);
+
+    size_t i = 0;
+    while (i < len) {
+        unsigned int a = data[i++];
+        unsigned int b = (i < len) ? data[i++] : 0;
+        unsigned int c = (i < len) ? data[i++] : 0;
+        unsigned int triple = (a << 16) | (b << 8) | c;
+        out.push_back(tbl[(triple >> 18) & 0x3F]);
+        out.push_back(tbl[(triple >> 12) & 0x3F]);
+        out.push_back(tbl[(triple >> 6) & 0x3F]);
+        out.push_back(tbl[triple & 0x3F]);
+    }
+
+    size_t mod = len % 3;
+    if (mod == 1) {
+        out.resize(out.size() - 2);
+    } else if (mod == 2) {
+        out.resize(out.size() - 1);
+    }
+
+    for (size_t j = 0; j < out.size(); ++j) {
+        if (out[j] == '+') {
+            out[j] = '-';
+        } else if (out[j] == '/') {
+            out[j] = '_';
+        }
+    }
+    return out;
+}
+
+static bool pkceRandomBytes(unsigned char *buf, size_t len) {
+#if defined(USE_LIBCURL)
+    return RAND_bytes(buf, (int)len) == 1;
+#elif defined(_WIN32)
+    return BCryptGenRandom(NULL, buf, (ULONG)len, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
+#else
+    (void)buf;
+    (void)len;
+    return false;
+#endif
+}
+
+static bool pkceSha256(const unsigned char *data, size_t len, unsigned char out[32]) {
+#if defined(USE_LIBCURL)
+    unsigned int hash_len = 0;
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        return false;
+    }
+    bool ok = EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) == 1
+        && EVP_DigestUpdate(ctx, data, len) == 1
+        && EVP_DigestFinal_ex(ctx, out, &hash_len) == 1
+        && hash_len == 32;
+    EVP_MD_CTX_free(ctx);
+    return ok;
+#elif defined(_WIN32)
+    BCRYPT_ALG_HANDLE alg = NULL;
+    BCRYPT_HASH_HANDLE hash = NULL;
+    DWORD hash_len = 0;
+    DWORD cb = 0;
+    bool ok = false;
+
+    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, NULL, 0) != 0) {
+        return false;
+    }
+    if (BCryptGetProperty(alg, BCRYPT_HASH_LENGTH, (PUCHAR)&hash_len, sizeof(hash_len), &cb, 0) != 0
+        || hash_len != 32) {
+        BCryptCloseAlgorithmProvider(alg, 0);
+        return false;
+    }
+    if (BCryptCreateHash(alg, &hash, NULL, 0, NULL, 0, 0) != 0) {
+        BCryptCloseAlgorithmProvider(alg, 0);
+        return false;
+    }
+    if (BCryptHashData(hash, (PUCHAR)data, (ULONG)len, 0) == 0
+        && BCryptFinishHash(hash, out, hash_len, 0) == 0) {
+        ok = true;
+    }
+    if (hash) {
+        BCryptDestroyHash(hash);
+    }
+    BCryptCloseAlgorithmProvider(alg, 0);
+    return ok;
+#else
+    (void)data;
+    (void)len;
+    (void)out;
+    return false;
+#endif
+}
+
+bool GeneratePkceS256(std::string& verifier_out, std::string& challenge_out) {
+    unsigned char random_bytes[32];
+    if (!pkceRandomBytes(random_bytes, sizeof(random_bytes))) {
+        return false;
+    }
+
+    verifier_out = base64UrlEncodeNoPadding(random_bytes, sizeof(random_bytes));
+    if (verifier_out.size() < 43) {
+        return false;
+    }
+
+    unsigned char digest[32];
+    if (!pkceSha256((const unsigned char*)verifier_out.c_str(), verifier_out.size(), digest)) {
+        return false;
+    }
+
+    challenge_out = base64UrlEncodeNoPadding(digest, sizeof(digest));
+    return !challenge_out.empty();
 }
 
 // Simple JSON parser để extract value từ JSON string
@@ -254,7 +376,8 @@ OidcTokenResponse ExchangeOidcToken(
     const std::string& redirectUri,
     const std::string& clientId,
     const std::string& clientSecret,
-    bool verifySSL) {
+    bool verifySSL,
+    const std::string& codeVerifier) {
     
     OidcTokenResponse response;
     printf("DEBUG: ExchangeOidcToken called\n");
@@ -274,6 +397,10 @@ OidcTokenResponse ExchangeOidcToken(
     postData << "&client_id=" << urlEncode(clientId);
     if (!clientSecret.empty()) {
         postData << "&client_secret=" << urlEncode(clientSecret);
+    }
+    if (!codeVerifier.empty()) {
+        postData << "&code_verifier=" << urlEncode(codeVerifier);
+        printf("DEBUG: PKCE code_verifier included in token request (len=%zu)\n", codeVerifier.size());
     }
     
     // Platform-specific HTTP client implementation
