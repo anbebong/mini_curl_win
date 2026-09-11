@@ -25,6 +25,7 @@ typedef struct {
     bool verify_ssl;            // true = verify SSL, false = skip
     bool save_token;            // true = lưu token vào file, false = chỉ in ra console
     char* listening_addr;       // Listening address (ví dụ: "http://localhost:8085")
+    char* code_verifier;        // PKCE code_verifier (S256), dùng khi đổi authorization code
 } MiniHttpServerConfig;
 
 // Callback function type cho OIDC token exchange success
@@ -94,6 +95,15 @@ bool MiniHttpServerConfig_LoadFromParams(
 
 // Free configuration structure
 void MiniHttpServerConfig_Free(MiniHttpServerConfig* config);
+
+// Sinh cặp PKCE S256: code_verifier + code_challenge (base64url)
+// verifier_out / challenge_out: buffer đích; trả về true nếu thành công
+bool MiniHttpServer_GeneratePkceS256(
+    char* verifier_out,
+    size_t verifier_out_size,
+    char* challenge_out,
+    size_t challenge_out_size
+);
 
 // Start HTTP server với OIDC callback support
 // Parameters:

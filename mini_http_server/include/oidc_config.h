@@ -18,6 +18,7 @@ struct OidcConfig {
     
     // Server configuration
     std::string listening_addr;    // Listening address (ví dụ: "http://localhost:8085")
+    std::string code_verifier;     // PKCE code_verifier (S256)
     
     OidcConfig() : verify_ssl(true), save_token(false), listening_addr("http://localhost:8085") {}
 };

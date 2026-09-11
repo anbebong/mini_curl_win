@@ -132,39 +132,40 @@ if(WIN32)
     else()
         message(FATAL_ERROR "mini_curl library not found. Please build from root CMakeLists.txt or add mini_curl as subdirectory")
     endif()
-    # Link Winsock và WinHTTP libraries cho Windows
-    target_link_libraries(mini_http_server ws2_32 winhttp)
+    # Link Winsock, WinHTTP và BCrypt (PKCE SHA256/random trên Windows)
+    target_link_libraries(mini_http_server ws2_32 winhttp bcrypt)
 else()
     # Linux: Chỉ sử dụng libcurl từ external (không dùng system)
-    # Tìm libcurl từ external/curl (static)
     set(CURL_LIB_DIR "${CMAKE_SOURCE_DIR}/../curl/lib/.libs")
     set(CURL_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/../curl/include")
-    
-    # Kiểm tra libcurl.a có tồn tại không
+    set(OPENSSL_DIR "${CMAKE_SOURCE_DIR}/../openssl")
+    set(ZLIB_DIR "${CMAKE_SOURCE_DIR}/../zlib")
+
+    # Luôn add OpenSSL include vì code dùng openssl/rand.h, openssl/evp.h
+    target_include_directories(mini_http_server PRIVATE "${OPENSSL_DIR}/include")
+
     if(EXISTS "${CURL_LIB_DIR}/libcurl.a")
         target_link_libraries(mini_http_server "${CURL_LIB_DIR}/libcurl.a")
         target_include_directories(mini_http_server PRIVATE "${CURL_INCLUDE_DIR}")
         target_compile_definitions(mini_http_server PRIVATE USE_LIBCURL)
         message(STATUS "Using static libcurl from: ${CURL_LIB_DIR}/libcurl.a")
-        
-        # Link với OpenSSL và zlib (nếu có)
-        if(EXISTS "${CMAKE_SOURCE_DIR}/../openssl/libssl.a")
-            target_link_libraries(mini_http_server 
-                "${CMAKE_SOURCE_DIR}/../openssl/libssl.a"
-                "${CMAKE_SOURCE_DIR}/../openssl/libcrypto.a"
-            )
-            target_include_directories(mini_http_server PRIVATE "${CMAKE_SOURCE_DIR}/../../openssl/include")
-        endif()
-        
-        if(EXISTS "${CMAKE_SOURCE_DIR}/../zlib/libz.a")
-            target_link_libraries(mini_http_server "${CMAKE_SOURCE_DIR}/../zlib/libz.a")
-            target_include_directories(mini_http_server PRIVATE "${CMAKE_SOURCE_DIR}/../zlib")
-        endif()
     else()
         message(FATAL_ERROR "libcurl.a not found in ${CURL_LIB_DIR}. Please build curl in external/curl first.")
     endif()
-    
-    # Link với pthread và các thư viện hệ thống cần thiết cho Linux
+
+    if(EXISTS "${OPENSSL_DIR}/libssl.a")
+        target_link_libraries(mini_http_server
+            "${OPENSSL_DIR}/libssl.a"
+            "${OPENSSL_DIR}/libcrypto.a"
+        )
+        message(STATUS "Using static OpenSSL from: ${OPENSSL_DIR}")
+    endif()
+
+    if(EXISTS "${ZLIB_DIR}/libz.a")
+        target_link_libraries(mini_http_server "${ZLIB_DIR}/libz.a")
+        target_include_directories(mini_http_server PRIVATE "${ZLIB_DIR}")
+    endif()
+
     target_link_libraries(mini_http_server pthread dl)
 endif()
 

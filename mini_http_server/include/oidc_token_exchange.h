@@ -52,8 +52,12 @@ OidcTokenResponse ExchangeOidcToken(
     const std::string& redirectUri,
     const std::string& clientId,
     const std::string& clientSecret = "",
-    bool verifySSL = true
+    bool verifySSL = true,
+    const std::string& codeVerifier = ""
 );
+
+// PKCE S256: sinh code_verifier + code_challenge (base64url, no padding)
+bool GeneratePkceS256(std::string& verifier_out, std::string& challenge_out);
 
 // Decode JWT payload (không verify signature - chỉ decode để lấy claims)
 //
